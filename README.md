@@ -17,7 +17,7 @@ To run phosphoProcessR, load the library and follow the examples in the vignette
 
 ```R
 library(phosphoProcessR)
-vignette("phosphoProcessR")
+browseVignettes("phosphoProcessR")
 ```
 
 ## References
