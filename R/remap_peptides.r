@@ -174,11 +174,13 @@ tidyEvidence <- function(evidence_file = NULL,
   # this will differ with dimethyl option/accross experiment
   # site level will remove sites < probability prior to merging
   if (filter_site_method == "site"){
-    # filter out sites with a certain probability here
-    # CANNOT REPLACE THE MODIFIED SEQUENCE - USED FOR JOIN LATER!
+    # filter out sites with a certain probability
     mapping_table_ph$prob_filter <- sapply(1:length(mapping_table_ph$prob),
                                            function(i)
                                 filter_site_prob(mapping_table_ph$prob[i], min_prob))
+    # now remove those which no longer contains a phosphosite
+    keep <- grep("(ph)", mapping_table_ph$prob_filter)
+    mapping_table_ph <- mapping_table_ph[keep,]
   }
 
   # also want to simply get all the probababilities!
