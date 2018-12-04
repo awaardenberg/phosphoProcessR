@@ -1,6 +1,6 @@
 # phosphoProcessR
 
-phosphoProcessR is an R package for analysis phosphoproteomics data.
+phosphoProcessR is an R package for analysis of phosphoproteomics data
 
 ## Installing phosphoProcessR
 
