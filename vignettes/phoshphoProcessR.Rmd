@@ -1,0 +1,161 @@
+---
+title: "phosphoProcessR: Differential Phosphorylation Analysis (DPA)"
+author: "Ashley J. Waardenberg"
+date: 'Last modified: 2018-12-04. Compiled: `r Sys.Date()`'
+output:
+  html_document:
+    highlight: tango
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  word_document:
+    toc: yes
+    toc_depth: '3'
+references:
+- DOI: XX
+  URL: XX
+  author:
+  - family: Engholm-Keller
+    given: K
+  - family: Waardenberg
+    given: AJ
+  - family: et
+    given: al
+  container-title: XX
+  id: Kasper2018
+  issue: X
+  issued:
+    month: X
+    year: 2018
+  page: XX-XX
+  publisher: XX
+  title: in press
+  type: article-journal
+  volume: XX
+- DOI: 10.1007/978-1-4939-6955-5_17
+  URL: https://www.ncbi.nlm.nih.gov/pubmed/28477123
+  author:
+  - family: Waardenberg
+    given: AJ
+  container-title: XX
+  id: Waardenberg2017
+  issued:
+    month: May
+    year: 2017
+  page: 229-244
+  publisher: Methods in Molecular Biology
+  title: Statistical analysis of ATM-dependent signaling in quantitative mass spectrometry phosphoproteomics
+  type: article-journal
+  volume: 1599
+vignette: >
+  %\VignetteIndexEntry{phosphoProcessR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Introduction to phosphoProcessR
+
+phosphoProcessR provides core utilities for performing Differential Phosphorylation Analysis (DPA). It has functionality for remapping and annotating an "evidence.txt"" file from a MaxQuant output, given a protein database, ready for further statistical analysis. Functionality includes normalisation, missing value imputation, batch correction utilising SVA and statistical analysis of differential phosphorylation using limma. Currently it only supports pairwise analysis between two groups and TMT labelled samples, however will be expanded to include additional normalisation, imputation, correction and differential analysis methods. phosphoProcessR implements an updated version described in: @Waardenberg2017 and @Kasper2018.
+
+phosphoProcessR contains 3 core functions:
+
++ **```tidyEvidence```** remap and merge MaxQuant Evidence file into "tidy" data frame
++ **```phosphoDE```** perform Differential Phosphorylation Analysis (DPA)
++ **```plot_this```** function which includes wrappers of various plotting functions
+
+Detailed information for each of these functions can be accessed using the ```?``` command before the function of interest. E.g. ```?tidyEvidence```
+
+# phosphoProcessR example workflow
+
+We will now consider an example dataset to format an "evidence.txt" file output by MaxQuant and perform DPA. These example data are provided in the phosphoProcessR package and relate to a dataset containing post-translational modifications dervied from Plasmodium falciparum-infectedhuman infected and non-infected human placenta's. See original publication for more details: Kawahara et al. MCP 2018 \url{https://doi.org/10.1074/mcp.RA118.000907}.
+
+Begin by loading the phosphoProcessR library and the data libraries included in the package.
+```{r echo=TRUE}
+library(phosphoProcessR)
+data(human_fasta_example)
+data(malaria_evidence_example)
+data(malaria_annotation_example)
+
+## sample 100 data points for demonstration
+#evidence_file_example <- head(malaria_evidence_example, 100)
+evidence_file_example <- malaria_evidence_example
+
+# calling the function reannotate and tidy the evidence file for statistical analysis
+# tidyEvidence supports multi-core processing using the BiocParallel package:
+# load BiocParallel library
+library(BiocParallel)
+# set/register the number of cores to use
+register(SnowParam(workers = 4))
+
+# call function
+evidence_tidy <- tidyEvidence(evidence_file = evidence_file_example,
+                              annotation_file = malaria_annotation_example,
+                              fasta_file = human_fasta_example,
+                              window_size = 15,
+                              is_TMT = TRUE,
+                              min_prob = 0.7,
+                              filter_site_method = "site")
+
+# view the data extracted
+head(evidence_tidy$intensity, 5)
+
+```
+
+## Plotting Phosphorylation Site Probability distribution
+
+The ouputs of evidence_tidy, using ```tidyEvidence()``` also include data of the phosphosite probabilities. This can be used to inform on the ```min_prob``` threshold utilised. To visualise:
+
+```{r echo=TRUE}
+plot_this(data_in = evidence_tidy$site_probability,
+          title = "Malaria example",
+          density = TRUE)
+
+```
+
+# Perform Differential Phosphorylation Analysis (DPA)
+
+```{r echo=TRUE}
+
+# utilising the intensity values derived from tidyEvidence, we now can perform DPA.
+# DPA is currently limited to pairs of groups defined in an annotation_file.
+
+DPA_out <- phosphoDE(phospho_input = evidence_tidy$intensity,
+                     annotation_file = malaria_annotation_example,
+                     correct = TRUE,
+                     adjust_method = "none")
+
+
+```
+
+## Principle Component Analysis
+```{r echo=TRUE}
+
+# get the students to check the results on each of the outputs as an exercise:
+plot_this(data_in = DPA_out$corrected_data,
+          annotation_file = malaria_annotation_example,
+          legend = TRUE,
+          label = TRUE,
+          title = "Malaria example",
+          pca = TRUE,
+          hclust = FALSE,
+          density = FALSE)
+```
+
+## Hierarchicical clustering
+
+```{r echo=TRUE}
+plot_this(data_in = DPA_out$corrected_data,
+          annotation_file = malaria_annotation_example,
+          legend = TRUE,
+          label = TRUE,
+          title = "Malaria example",
+          hclust = TRUE)
+```
+
+# References

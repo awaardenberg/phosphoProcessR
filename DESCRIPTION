@@ -1,0 +1,36 @@
+Package: phosphoProcessR
+Type: Package
+Title: phosphoProcessR: Differential Phosphorylation Analysis (DPA)
+Version: 0.99.2
+Authors@R: person("Ashley J.", "Waardenberg", email =
+    "a.waardenberg@gmail.com", role=c("aut", "cre"))
+Description: phosphoProcessR includes functions for remapping and annotation of
+    MaxQuant evidence.txt files for statistical analyses. A statistical workflow
+    as published XXXXXX is provided, which includes normalisation, missing value
+    imputation, batch correction and differential phosphorylation analysis using
+    limma (currently supports pairwise models).
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 3.5)
+Imports:
+    seqinr,
+    BiocParallel,
+    stringi,
+    limma,
+    impute,
+    preprocessCore,
+    sva,
+    RColorBrewer,
+    pcaMethods,
+    dendextend,
+    stats,
+    utils
+biocViews: 
+    Proteomics,
+    SequenceMatching
+Suggests: knitr,
+    rmarkdown
+RoxygenNote: 6.1.0
+VignetteBuilder: knitr
