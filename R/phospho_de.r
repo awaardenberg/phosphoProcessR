@@ -4,8 +4,8 @@
 #' function performs statistical analysis of phosphorylation data. It performs
 #' normalisation, missing value imputation, batch correction utilising SVA and
 #' statistical analysis of differential phosphorylation using limma. Currently
-#' it only supports pairwise analysis between two groups and TMT labelled
-#' samples. Will not run if more than two groups detected
+#' it only supports automated pairwise analysis between two groups. Will not run
+#' limma if more than two groups detected. See limma_analysis parameter.
 #' @param phospho_input Data.frame of intensity values
 #' @param annotation_file A data.frame describing the experimental design
 #' @param normalisation_method Options are "none" or "quantile". Default =
@@ -13,15 +13,15 @@
 #' @param impute Select from the following methods: "FALSE", "knn"
 #' @param correct Performs batch correction using surrogate variable analysis
 #' (SVA). Recommended to assess utility through PCA. Default = FALSE
+#' @param limma_analysis Perform DPE using limma. Default = TRUE
 #' @param adjust_method Method used for multiple comparison adjustment of
 #' p-values. Options are: "holm", "hochberg", "hommel", "bonferroni", "BH",
 #' "BY", "fdr" or "none". See ?p.adjust.methods for a details description and
 #' references. Default = "BH"
 #' @param input_percent Percentage of data that must be complete prior to
 #' performing missing value imputation. Default = 0.75
-#' @param is_TMT Default = TRUE
 #' @param pairing Default = "unpaired"
-#' @param verbose Print progress to screen. Default=FALSE
+#' @param verbose Print progress to screen. Default = FALSE
 #' @examples
 #' ## Use the outputs from the first example to demonstrate
 #'## Return the annotated data with extracted peptides:
@@ -38,7 +38,6 @@
 #'                               annotation_file = malaria_annotation_example,
 #'                               fasta_file = human_fasta_example,
 #'                               window_size = 15,
-#'                               is_TMT = TRUE,
 #'                               min_prob = 0.7,
 #'                               filter_site_method = "site")
 #'
@@ -71,9 +70,9 @@ phosphoDE <- function(phospho_input = NULL,
                       normalisation_method = "quantile",
                       impute = FALSE,
                       correct = FALSE,
+                      limma_analysis = TRUE,
                       adjust_method = "BH",
                       input_percent = 0.75,
-                      is_TMT = TRUE,
                       pairing = "unpaired",
                       verbose = FALSE){
 
@@ -95,8 +94,6 @@ if ((impute %in% c("TRUE", "FALSE")) == FALSE)
   stop("impute must be either TRUE or FALSE")
 if ((correct %in% c("TRUE", "FALSE")) == FALSE)
   stop("correct must be either TRUE or FALSE")
-if ((is_TMT %in% c("TRUE", "FALSE")) == FALSE)
-  stop("is_TMT must be either TRUE or FALSE")
 if ((pairing %in% c("unpaired")) == FALSE)
   stop("pairing must only be unpaired - only method currently supported")
 
@@ -111,7 +108,11 @@ if("group" %in% colnames(annotation_file) == FALSE){
   stop("A annotation_file must be supplied with a column labelled \"group\"")
 }
 
-#check that the annotation_file$labels exist!
+  
+# annotation_file needs to be updated.
+# for DE analysis only need to keep: "group" and "labels"
+  
+  
 cols_of_interest <- intersect(colnames(phospho_input), annotation_file$labels)
 set_diff <- setdiff(annotation_file$labels, colnames(phospho_input))
 
@@ -121,9 +122,9 @@ if(length(cols_of_interest) != nrow(annotation_file))
         correct annotation_file provided. ", set_diff, " not found!")
 
 # check length of samples is only two (only two currently supported)
-if(length(unique(annotation_file$group)) != 2)
+if((limma_analysis == TRUE && length(unique(annotation_file$group)) > 2))
   stop("phosphoDE currently only supports comparison between two groups. There
-       are ", unique(annotation_file$group))
+       are ", length(unique(annotation_file$group)), " groups detected.")
 
 if (verbose) {
   message("Verbosity has been selected!")
@@ -134,6 +135,8 @@ if (verbose) {
 # If not imputing - only consider complete data
 
 # as exporting potentially empty files for each step, setup as NA
+results <- NA
+my_data <- NA
 phospho_sva_out <- NA
 phospho_impute_out <- NA
 phospho_norm_out <- NA
@@ -149,6 +152,7 @@ if(impute == FALSE){
 # Normalise (currently only Quantile supported)
 # option to plug in different normalisation methods here.
 phospho_norm_out <- phospho_norm(phospho_input, normalisation_method)
+phospho_input <- phospho_norm_out
 
 # missing value imputation
 if(impute == TRUE){
@@ -165,55 +169,57 @@ if(correct == TRUE){
   phospho_sva_out <- phospho_input
 }
 
-# perform limma analysis
-# build matrix as per the consensusDE package
-# extract information from annotation_file
-
-group <- factor(annotation_file$group)
-design_table <- data.frame("file"=as.character(annotation_file$labels),
-                           "group"=group)
-
-# currently on unpaired is supported
-if(pairing=="unpaired"){
-  design <- model.matrix(~group)
-}
-
-# paired, factor pairing
-if(pairing=="paired"){
-#  pairs <- factor(se$pairs)
-#  design.table <- data.frame(design.table,
-#                             "pairs"=se$pairs)
-#  design <- model.matrix(~pairs + group)
-}
-
-# format model.matrix
-rownames(design) <- as.character(annotation_file$labels)
-colnames(design) <- gsub("group", "", colnames(design))
-colnames(design)[1] <- "Intercept"
-
-fit <- lmFit(phospho_input, design)
-contrast_matrix <- build_contrast_matrix(design_table, design)
-all_fit <- contrasts.fit(fit = fit,
-                        contrasts = t(data.frame(t(contrast_matrix[,1]),
-                                    row.names = colnames(contrast_matrix)[1])))
-
-fit2 <- eBayes(all_fit)
-results <- topTable(fit2, number=nrow(fit2$coefficients))
-
-# p_value correction
-# reformat for kinswingr
-if(adjust_method == "none"){
-  my_data <- data.frame("annotation"=rownames(results),
-                        "peptide" = NA,
-                        "fc" = results$logFC,
-                        "pval" = results$P.Value)
-}
-# if a p_adjust method is selected:
-if(adjust_method != "none"){
-  my_data <- data.frame("annotation"=rownames(results),
-                        "peptide" = NA,
-                        "fc" = results$logFC,
-                        "pval" = p.adjust(results$P.Value, method = adjust_method))
+if(limma_analysis == TRUE){
+  # perform limma analysis
+  # build matrix as per the consensusDE package
+  # extract information from annotation_file
+  
+  group <- factor(annotation_file$group)
+  design_table <- data.frame("file"=as.character(annotation_file$labels),
+                             "group"=group)
+  
+  # currently on unpaired is supported
+  if(pairing=="unpaired"){
+    design <- model.matrix(~group)
+  }
+  
+  # paired, factor pairing
+  if(pairing=="paired"){
+  #  pairs <- factor(se$pairs)
+  #  design.table <- data.frame(design.table,
+  #                             "pairs"=se$pairs)
+  #  design <- model.matrix(~pairs + group)
+  }
+  
+  # format model.matrix
+  rownames(design) <- as.character(annotation_file$labels)
+  colnames(design) <- gsub("group", "", colnames(design))
+  colnames(design)[1] <- "Intercept"
+  
+  fit <- lmFit(phospho_input, design)
+  contrast_matrix <- build_contrast_matrix(design_table, design)
+  all_fit <- contrasts.fit(fit = fit,
+                          contrasts = t(data.frame(t(contrast_matrix[,1]),
+                                      row.names = colnames(contrast_matrix)[1])))
+  
+  fit2 <- eBayes(all_fit)
+  results <- topTable(fit2, number=nrow(fit2$coefficients))
+  
+  # p_value correction
+  # reformat for kinswingr
+  if(adjust_method == "none"){
+    my_data <- data.frame("annotation"=rownames(results),
+                          "peptide" = NA,
+                          "fc" = results$logFC,
+                          "pval" = results$P.Value)
+  }
+  # if a p_adjust method is selected:
+  if(adjust_method != "none"){
+    my_data <- data.frame("annotation"=rownames(results),
+                          "peptide" = NA,
+                          "fc" = results$logFC,
+                          "pval" = p.adjust(results$P.Value, method = adjust_method))
+  }
 }
 
 return(list("results" = results,
@@ -239,29 +245,37 @@ phospho_norm <- function(data_in, normalisation_method){
   }
 }
 
-impute_data <- function(data_in, input_percent, is_TMT = is_TMT){
+impute_data <- function(data_in, input_percent){
   # uses a default seed
   data_out <- data.frame(impute.knn(as.matrix(data_in))$data)
-
-  if(is_TMT == "TRUE"){
-    #do not impute.
-    data_out <- data_in
-  }
-  return(data_out)
+return(data_out)
 }
 
 correct_data <- function(data_in, annotation_file){
   # build matrix for model from annotation.file provided
-  mod_matrix <- data.frame("sample"=as.factor(annotation_file$group))
-  rownames(mod_matrix) <- colnames(data_in)
-  mod = model.matrix(~as.factor(sample), data=mod_matrix)
-  mod0 <- model.matrix(~1,data=mod_matrix)
+  mod_matrix <- data.frame(
+    "sample" = as.factor(as.character(annotation_file$group)))
+  # ensures order is correct
+  rownames(mod_matrix) <- annotation_file$labels
+  mod = model.matrix(~as.factor(sample), 
+                     data = mod_matrix)
+  mod0 <- model.matrix(~1,
+                       data=mod_matrix)
   # fit the SVA iteratively reweighted model, using a model of variables and null of none.
-  svaobj <- invisible(sva(as.matrix(data_in), mod, mod0, method="irw"))
-  mod_sv <- cbind(mod,svaobj$sv)
-  mod0_sv <- cbind(mod0,svaobj$sv)
+  svaobj <- invisible(sva(as.matrix(data_in), 
+                          mod, 
+                          mod0, 
+                          method="irw"))
+  mod_sv <- cbind(mod,
+                  svaobj$sv)
+  mod0_sv <- cbind(mod0,
+                   svaobj$sv)
   # reweight data
-  v_2 <- invisible(fsva(as.matrix(data_in), mod=mod, sv=svaobj, newdat=data_in, method="exact"))
+  v_2 <- invisible(fsva(as.matrix(data_in), 
+                        mod = mod, 
+                        sv = svaobj, 
+                        newdat = data_in, 
+                        method = "exact"))
   data_out <- v_2$new
 return(data_out)
 }

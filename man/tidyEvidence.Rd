@@ -5,8 +5,10 @@
 \title{Remap and merge MaxQuant Evidence file into "tidy" data frame}
 \usage{
 tidyEvidence(evidence_file = NULL, annotation_file = NULL,
-  fasta_file = NULL, window_size = 15, is_TMT = TRUE, min_prob = 0,
-  filter_site_method = "peptide", verbose = FALSE)
+  fasta_file = NULL, window_size = 15, min_prob = 0,
+  filter_site_method = "site", return_intensity = TRUE,
+  return_mapping_table = TRUE, return_site_probability = TRUE,
+  verbose = FALSE)
 }
 \arguments{
 \item{evidence_file}{MaxQuant evidence.txt file}
@@ -19,11 +21,6 @@ tidyEvidence(evidence_file = NULL, annotation_file = NULL,
 around the phosphosite. E.g. XXXSXXX, would correspond to a window size of 7.
 Default = 15}
 
-\item{is_TMT}{TMT MaxQuant output does not include an experiment column, as
-each experiment is a TMT label. Use "FALSE" if a di/tri methyl experiment,
-which will extract experiment information from the "Experiment" column in the
-evidence.txt MaxQuant table. Default = TRUE}
-
 \item{min_prob}{The minimum probability observed for any phosphosite in a
 peptide. Recommended to use 0.7, but first assess with distribution as per
 output table. See vignette for example. Default = 0}
@@ -33,14 +30,28 @@ probability are available. "site" will remove all phosphosites identified
 with a probability lower that "min_prob". "peptide" will remove all peptides
 that are predicted to contain a set combination of sites which do not conatin
 a minimum probability of a site. Options are "site" or "peptide". Default =
-"peptide"}
+"site"}
+
+\item{return_intensity}{If TRUE will evaluate the MaxQuant evidence results
+and return a table of intensities for further analysis. If FALSE, the
+evidence file will not be "tidied" and the intensity object returned by 
+tidyEvidence will be NA. Default = TRUE}
+
+\item{return_mapping_table}{If TRUE a mapping table will be generated from 
+the fasta file input and returned. If FALSE the mapping_table returned by 
+tidyEvidence will be NA. Default = TRUE}
+
+\item{return_site_probability}{If TRUE will evaluate the MaxQuant evidence 
+file and return a vector of all the site probabilities identified in all 
+phosphorylated peptides. If FALSE, the site_probability vector returned by
+tidyEvidence will be NA. Default = TRUE.}
 
 \item{verbose}{Print progress to screen. Default = FALSE}
 }
 \value{
 List of 3 objects. 1) xx$intensity is a reformatted table of
 intensities, now suitable for further statistical analyses, 2)
-xx$intensity is table of remapped peptides and 3) xx$site_probability is a
+xx$mapping_table is table of remapped peptides and 3) xx$site_probability is a
 vector of all the site probabilities identified.
 }
 \description{
@@ -63,7 +74,6 @@ evidence_tidy <- tidyEvidence(evidence_file = evidence_file_example,
                               annotation_file = malaria_annotation_example,
                               fasta_file = human_fasta_example,
                               window_size = 15,
-                              is_TMT = TRUE,
                               min_prob = 0.7,
                               filter_site_method = "site")
 

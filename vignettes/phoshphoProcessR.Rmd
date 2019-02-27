@@ -98,7 +98,6 @@ evidence_tidy <- tidyEvidence(evidence_file = evidence_file_example,
                               annotation_file = malaria_annotation_example,
                               fasta_file = human_fasta_example,
                               window_size = 15,
-                              is_TMT = TRUE,
                               min_prob = 0.7,
                               filter_site_method = "site")
 

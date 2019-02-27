@@ -1,4 +1,17 @@
-Changes in version 0.99.2 (2018-12-04)
-+ Release to github
+Changes in version 0.99.4 (2019-01-22)
++ Added support to tidyEvidence function for Experiment column
++ changed filter_site_method default to site
++ Added parameters return_intensity, return_mapping_table and 
+return_site_probability to tidyEvidence function to allow users to optionally
+not run a full merge of intensity values
++ removed is_TMT paramter from tidyEvidence, as no longer required
++ corrected bug in phosphoDE after normalisation
++ added limma_analysis parameter to phosphoDE
++ correct bug in correct function for phosphoDE
++ change annotation to "best" annotation as per Engholm et al. 2019
+
 Changes in version 0.99.3 (2018-12-04)
 + Fix to phosphosite threhold at site level
+
+Changes in version 0.99.2 (2018-12-04)
++ Release to github

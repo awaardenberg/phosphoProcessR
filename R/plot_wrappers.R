@@ -196,7 +196,7 @@ plot_PCA_wrapper <- function(data_in=NULL,
   # add legend:
   if(legend==TRUE){
     legend("bottomright", c(as.character(unique(pc_scores$group))),
-                            col=colors,
+                            col=colors[annotation_file$group],
                           pch = c(rep(19, length(unique(pc_scores$group)))),
            title = "SAMPLE GROUPS", inset = .02, cex=0.5)
   }

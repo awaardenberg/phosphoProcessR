@@ -6,7 +6,7 @@
 \usage{
 phosphoDE(phospho_input = NULL, annotation_file = NULL,
   normalisation_method = "quantile", impute = FALSE, correct = FALSE,
-  adjust_method = "BH", input_percent = 0.75, is_TMT = TRUE,
+  limma_analysis = TRUE, adjust_method = "BH", input_percent = 0.75,
   pairing = "unpaired", verbose = FALSE)
 }
 \arguments{
@@ -22,6 +22,8 @@ phosphoDE(phospho_input = NULL, annotation_file = NULL,
 \item{correct}{Performs batch correction using surrogate variable analysis
 (SVA). Recommended to assess utility through PCA. Default = FALSE}
 
+\item{limma_analysis}{Perform DPE using limma. Default = TRUE}
+
 \item{adjust_method}{Method used for multiple comparison adjustment of
 p-values. Options are: "holm", "hochberg", "hommel", "bonferroni", "BH",
 "BY", "fdr" or "none". See ?p.adjust.methods for a details description and
@@ -30,11 +32,9 @@ references. Default = "BH"}
 \item{input_percent}{Percentage of data that must be complete prior to
 performing missing value imputation. Default = 0.75}
 
-\item{is_TMT}{Default = TRUE}
-
 \item{pairing}{Default = "unpaired"}
 
-\item{verbose}{Print progress to screen. Default=FALSE}
+\item{verbose}{Print progress to screen. Default = FALSE}
 }
 \value{
 A List of 5 objects. 1) "results" are the limma results, 2)
@@ -48,8 +48,8 @@ Given a remapped evidence file from a MaxQuant output, this
 function performs statistical analysis of phosphorylation data. It performs
 normalisation, missing value imputation, batch correction utilising SVA and
 statistical analysis of differential phosphorylation using limma. Currently
-it only supports pairwise analysis between two groups and TMT labelled
-samples. Will not run if more than two groups detected
+it only supports automated pairwise analysis between two groups. Will not run
+limma if more than two groups detected. See limma_analysis parameter.
 }
 \examples{
 ## Use the outputs from the first example to demonstrate
@@ -67,7 +67,6 @@ evidence_tidy <- tidyEvidence(evidence_file = evidence_file_example,
                               annotation_file = malaria_annotation_example,
                               fasta_file = human_fasta_example,
                               window_size = 15,
-                              is_TMT = TRUE,
                               min_prob = 0.7,
                               filter_site_method = "site")
 
