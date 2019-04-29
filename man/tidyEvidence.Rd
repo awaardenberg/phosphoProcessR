@@ -6,8 +6,9 @@
 \usage{
 tidyEvidence(evidence_file = NULL, annotation_file = NULL,
   fasta_file = NULL, window_size = 15, min_prob = 0,
-  filter_site_method = "site", return_intensity = TRUE,
-  return_mapping_table = TRUE, return_site_probability = TRUE,
+  max_sites = "all", filter_site_method = "site",
+  return_intensity = TRUE, return_mapping_table = TRUE,
+  return_site_probability = TRUE, return_site_numbers = TRUE,
   verbose = FALSE)
 }
 \arguments{
@@ -24,6 +25,10 @@ Default = 15}
 \item{min_prob}{The minimum probability observed for any phosphosite in a
 peptide. Recommended to use 0.7, but first assess with distribution as per
 output table. See vignette for example. Default = 0}
+
+\item{max_sites}{This will filter out peptides with numbers of phosphosites 
+greater than this value. Options are numeric values (e.g., 1, 2, 3) or "all".
+"all" keeps all peptides. Default="all"}
 
 \item{filter_site_method}{Two methods for filtering peptides by site
 probability are available. "site" will remove all phosphosites identified
@@ -45,6 +50,11 @@ tidyEvidence will be NA. Default = TRUE}
 file and return a vector of all the site probabilities identified in all 
 phosphorylated peptides. If FALSE, the site_probability vector returned by
 tidyEvidence will be NA. Default = TRUE.}
+
+\item{return_site_numbers}{If TRUE will evaluate the MaxQuant evidence 
+file and return a vector of the number of sites identified for each peptide. 
+If FALSE, the site_probability vector returned by tidyEvidence will be NA. 
+Default = TRUE.}
 
 \item{verbose}{Print progress to screen. Default = FALSE}
 }

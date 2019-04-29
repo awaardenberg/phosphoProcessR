@@ -12,6 +12,9 @@
 #' @param min_prob The minimum probability observed for any phosphosite in a
 #' peptide. Recommended to use 0.7, but first assess with distribution as per
 #' output table. See vignette for example. Default = 0
+#' @param max_sites This will filter out peptides with numbers of phosphosites 
+#' greater than this value. Options are numeric values (e.g., 1, 2, 3) or "all".
+#' "all" keeps all peptides. Default="all"
 #' @param filter_site_method Two methods for filtering peptides by site
 #' probability are available. "site" will remove all phosphosites identified
 #' with a probability lower that "min_prob". "peptide" will remove all peptides
@@ -29,6 +32,10 @@
 #' file and return a vector of all the site probabilities identified in all 
 #' phosphorylated peptides. If FALSE, the site_probability vector returned by
 #' tidyEvidence will be NA. Default = TRUE.
+#' @param return_site_numbers If TRUE will evaluate the MaxQuant evidence 
+#' file and return a vector of the number of sites identified for each peptide. 
+#' If FALSE, the site_probability vector returned by tidyEvidence will be NA. 
+#' Default = TRUE.
 #' @param verbose Print progress to screen. Default = FALSE
 #'
 #' @examples
@@ -66,16 +73,19 @@
 #' @import BiocParallel
 #' @importFrom stringi stri_length
 #' @importFrom stats median
+#' @importFrom plyr join_all
 
 tidyEvidence <- function(evidence_file = NULL,
                          annotation_file = NULL,
                          fasta_file = NULL,
                          window_size = 15,
                          min_prob = 0,
+                         max_sites = "all",
                          filter_site_method = "site",
                          return_intensity = TRUE,
                          return_mapping_table = TRUE,
                          return_site_probability = TRUE,
+                         return_site_numbers = TRUE,
                          verbose = FALSE
                          ){
   #----------------------------------------------
@@ -84,6 +94,8 @@ tidyEvidence <- function(evidence_file = NULL,
     stop("filter_site_method must be either: site [or] peptide")
   if ((min_prob >= 0 & min_prob <= 1) == FALSE)
     stop("min_prob must be between zero[0] and one[1]")
+  if((max_sites > 0 | max_sites =="all") == FALSE)
+    stop("max_sites must be greater than zero[0] or \"all\"")
   if (is.null(evidence_file)) 
     stop("evidence_file not provided; you must provide an evidence_file table")
   # CHECK FORMAT OF TABLE HERE
@@ -216,7 +228,6 @@ tidyEvidence <- function(evidence_file = NULL,
   contains_ph <- grep("(ph)", mapping_table$mod_seq)
   # strip all the characters and lower case letters into a new column
   mapping_table$stripped <- gsub("[a-z]|[(]|[)]|_", "", mapping_table$mod_seq)
-
   # 3. identify contaminants
   # reverse peptides will contain "__", contaminants: "CON__", REV: "REV__"
   cont_mapped <- grep("__", mapping_table$protein)
@@ -225,9 +236,15 @@ tidyEvidence <- function(evidence_file = NULL,
   keep <- setdiff(contains_ph, cont_mapped)
   mapping_table_ph <- mapping_table[keep,]
   
+  # remove cases where there are no probabilities assigned.
+  mapping_table_ph$prob[mapping_table_ph$prob == ""] <- NA
+  mapping_table_ph <- mapping_table_ph[!is.na(mapping_table_ph$prob),]
+  
   # determine probability distribution here from all sites
+  # this is just for returning and inspecting
   phospho_prob_out <- extract_probability(mapping_table_ph$prob)[[1]]
-
+  site_numbers_out <- extract_site_numbers(mapping_table_ph$prob)
+  
   # 5. extract data from the fasta file (accessible as table and list now)
   fasta_data <- extract_fasta_data(fasta_file)
   
@@ -249,6 +266,18 @@ tidyEvidence <- function(evidence_file = NULL,
       keep <- grep("(ph)", mapping_table_ph$prob_filter)
       # keep only peptides that still contain a (ph), there above min_prob
       mapping_table_ph <- mapping_table_ph[keep,]
+      # count site numbers
+      phospho_no <- gsub("(ph)", "1/", mapping_table_ph$prob_filter, fixed = TRUE)
+      phospho_no <- gsub("([[:alpha:]])", "", phospho_no)
+      phospho_no <-sapply(strsplit(phospho_no, '/'), function(x) sum(as.numeric(x)))
+      mapping_table_ph$phospho_no <- phospho_no
+      
+      # filter by number of sites defined
+      if(max_sites != "all"){
+        keep <- mapping_table_ph$phospho_no <= max_sites
+        mapping_table_ph <- mapping_table_ph[keep,]
+      }
+
     }
   
     # if site is not selected
@@ -258,6 +287,7 @@ tidyEvidence <- function(evidence_file = NULL,
 
     # 6. Get centered position and centered sequence for each site from the database
     # this needs to be vectorised!
+    # library(stringi)
     # CHANGE BACK TO BPLAPPY
     centred_sites <- bplapply(seq_len(nrow(mapping_table_ph)), function(x)
                               map_sites(mapping_table_ph,
@@ -267,42 +297,33 @@ tidyEvidence <- function(evidence_file = NULL,
                                         which_row = x))
   
     centred_sites <- unlist(centred_sites)
-  
     # check match here.
     # i.e. or new data.frame may not match up if contains funky ids
   
     # 7. merge with evidence file annotation
-  
     mapped_out <- data.frame("annotation"= centred_sites, mapping_table_ph)
-  
-  
-    # X. - here is where to add the best annotation option.
   
     # 8. remerge with the evidence file:
     mapped_out <- data.frame("annotation" = mapped_out$annotation,
                              "Modified.sequence" = mapped_out$mod_seq)
-    
-    # if best mapping:
-
   }
   
   if(return_intensity == TRUE){
     evidence_remap <- merge(mapped_out, evidence_file, by="Modified.sequence")
-    # peptide level will not alter the phosphosite (but only remove collections
-    # with less than minimum phosphosite probability)
-    # filter out peptides without a minimum probability HERE
-
+    # filter out peptides without a minimum probability
     # 9. determine site probabilities
     phospho_prob <- extract_probability(evidence_remap$Phospho..STY..Probabilities)[[2]]
     evidence_remap$phospho_prob_max <- as.numeric(lapply(strsplit(phospho_prob,";"), max))
     # 10. Trim file and converge
     # put each experiment into its own list.. i.e. subset
+    
     experiment_lists <- lapply(seq_along(uniq_experiments), function(x)
                               evidence_remap[evidence_remap$Experiment == 
                                                uniq_experiments[x],])
-    names(experiment_lists) <- uniq_experiments
     
-    clean_evidence <- bplapply(seq_along(experiment_lists), function(x)
+    names(experiment_lists) <- uniq_experiments
+    # change to bplappy
+    clean_evidence <- lapply(seq_along(experiment_lists), function(x)
                                tidy_samples(experiment_lists[[x]],
                                             annotation_file,
                                             names(experiment_lists)[x],
@@ -316,22 +337,15 @@ tidyEvidence <- function(evidence_file = NULL,
       med_out <- clean_evidence[[1]]
     }
     if(length(clean_evidence) > 1){
-      med_out <- data.frame(clean_evidence[[1]])
-      # check over character on merging lists...
-      med_out$ID <- as.character(rownames(med_out))
-      # ideally put into a database here
-      merge_out <- bplapply(2:length(clean_evidence), function(x)
-                          merge(med_out, 
-                                data.frame(clean_evidence[[x]],
-                                           "ID"=as.character(
-                                             rownames(clean_evidence[[x]]))),
-                                all=TRUE))
-      # now merged, take first object in list
-      merge_out <- merge_out[[1]]
-      rownames(merge_out) <- merge_out$ID
+      # ideally put into a database here, keys will be all mapped sites.
+      med_out <- lapply(1:length(clean_evidence), function(x)
+                        data.frame(clean_evidence[[x]],
+                                   "ID"=as.character(
+                                     rownames(data.frame(clean_evidence[[x]])))))
+      med_out <- join_all(med_out, by="ID", type="full")
+      rownames(med_out) <- med_out$ID
       # remove ID column
-      merge_out <- merge_out[ , !(colnames(merge_out) %in% "ID")]
-      med_out <- merge_out
+      med_out <- med_out[ , !(colnames(med_out) %in% "ID")]
     }
   }
 
@@ -346,10 +360,15 @@ tidyEvidence <- function(evidence_file = NULL,
   if(return_site_probability == FALSE){
     phospho_prob_out <- NA
   }
+  if(return_site_numbers == FALSE){
+    site_numbers_out <- NA
+  }
+  
   
 return(list("intensity" = med_out,
        "mapping_table" = mapped_out,
-       "site_probability" = phospho_prob_out))
+       "site_probability" = phospho_prob_out,
+       "site_numbers" = site_numbers_out))
 }
 
 
@@ -361,20 +380,7 @@ map_sites <- function(mapping_table_ph,
                       fasta_data,
                       window_size,
                       which_row){
-  
-  
-  #mapping_table_ph
-  #fasta_file
-  #fasta_data
-  #which_row
-  
-  
-  #print(which_row)
-  #which_row <- 87
-  #which_row <- 387
-  #which_row <- 27473
-  
-  
+
   fasta_protein_name <- fasta_data[[6]]
   fasta_gene_name <- fasta_data[[7]]
   fasta_evidence <- fasta_data[[8]]
@@ -398,12 +404,10 @@ map_sites <- function(mapping_table_ph,
     row_matches <- sapply(seq_along(best_proteins), function(x)
       which(fasta_protein_name == best_proteins[x]))      
     
-    #2. # extract the genes here:
+    #2. # extract genes here:
     gene_symbols <- sapply(seq_along(row_matches), function(x)
       fasta_gene_name[row_matches[x]])
-###########################################    
-    #DO THE FOLLOWING FOR EACH UNIQUE GENE:
-    
+
     #3. Get the vector for the best gene criteria
     best_gene_rows <- c(sapply(seq_along(unique(gene_symbols)), function(i)
              best_gene(unique(gene_symbols)[i],
@@ -411,35 +415,32 @@ map_sites <- function(mapping_table_ph,
                        fasta_evidence,
                        fasta_database, 
                        fasta_length)))
-    
-    #need to unlist here as well.
+
     best_gene_rows <- unlist(best_gene_rows)
     
-    # Annotation can be updated now!
+    # update annotations
     protein_annotation <- paste(fasta_protein_name[best_gene_rows], collapse=":")
     gene_symbols  <- paste(fasta_gene_name[best_gene_rows], collapse=":") 
     protein_database  <- paste(fasta_database[best_gene_rows], collapse=":") 
     protein_evidence  <- paste(fasta_evidence[best_gene_rows], collapse=":") 
     protein_length  <- paste(fasta_length[best_gene_rows], collapse=":") 
 
-    # obtain the stripped peptide sequence (from the original row)
+    # obtain stripped peptide sequence (from original row)
     peptide <- as.character(mapping_table_ph$stripped[which_row])
     mod_peptide <- as.character(mapping_table_ph$prob_filter[which_row])
 
-    # extract the sites:
-    # now update the row_matches to the best matches
+    # extract sites:
+    # update row_matches to the best matches
     row_matches <- best_gene_rows
     # this will map to all the proteins - end up with length of 1 or > for multi-mapped
     phospho_site_list <- lapply(seq_along(row_matches), function(x)
       phosho_positions(peptide, mod_peptide, seq = fasta_sequences[row_matches[x]],
                        window_size = window_size))
-    #this is a list now
     # i.e. just one protein, with potentially multiple sites
     if(length(phospho_site_list) == 1){
       phospho_sites <- paste(phospho_site_list[[1]]$sites, collapse=";")
       centered_seqs <- paste(phospho_site_list[[1]]$seqs, collapse=";")
     }
-    
     # i.e. there are multiple proteins - i.e. MULTI-MAPPED
     if(length(phospho_site_list) > 1){
       phospho_sites <- c(sapply(seq_len(length(phospho_site_list)), function(x)
@@ -451,40 +452,41 @@ map_sites <- function(mapping_table_ph,
       ))
       centered_seqs <- paste(centered_seqs, collapse=":")
     }
-    #EG  "A0A096MIX2|Ddx17|494|RSRYRTTSSANNPN|tr|1|179"
-    return(paste(gene_symbols, protein_annotation, phospho_sites, centered_seqs, protein_database, protein_evidence, protein_length, sep="|"))
+  return(paste(gene_symbols, 
+               protein_annotation, 
+               phospho_sites, 
+               centered_seqs, 
+               protein_database, 
+               protein_evidence, 
+               protein_length, 
+               sep="|")
+         )
   }
   
   # 2. if it is not annotated? It will have a length of zero - retunr(NO_MATCH)
   if(length(lead_p_mapped) == 0L){
-    #lead_p_mapped <- "NO_MATCH"
     return("NO_MATCH")
   }
 
 }
 
 
-best_gene <- function(each_gene, each_gene_rows, fasta_evidence, fasta_database, fasta_length){
-  #i=3
-  #each_gene <- unique(gene_symbols)[i]
-  #each_gene_rows <- row_matches[which(unique(gene_symbols)[i] == gene_symbols)]
-  #all_genes <- NA
-  #fasta_evidence <- fasta_evidence
+best_gene <- function(each_gene, 
+                      each_gene_rows,
+                      fasta_evidence, 
+                      fasta_database, 
+                      fasta_length){
   
-  #each_gene <- unique(gene_symbols)[1]
-  #each_gene_rows <- row_matches[which(each_gene == gene_symbols)]
-  #fasta_evidence <- fasta_gene_name
-  
-  # 3. If the genes are the same - determine best ACCESSION for EACH unique gene
-  #     1) select gene with best (smallest number) evdience - which gene has best evidence?
-  # or removoal all with evidence greater than min...
+  # If the genes are the same - determine best ACCESSION for EACH unique gene
+  #     1) select gene with best (smallest number) evidence
+  # or removal all with evidence greater than min...
   each_gene_evidence_in <- sapply(seq_along(each_gene_rows), function(x)
     fasta_evidence[each_gene_rows[x]])
   # remove genes with evidence above the minimum...
   # update vector of row matches
   each_gene_rows <- each_gene_rows[!each_gene_evidence_in > min(each_gene_evidence_in)]
   
-  # 4. If database is the same
+  # If database is the same
   #     1) select "tr" over "sp"
   each_gene_database_in <- sapply(seq_along(each_gene_rows), function(x)
     fasta_database[each_gene_rows[x]])
@@ -493,25 +495,14 @@ best_gene <- function(each_gene, each_gene_rows, fasta_evidence, fasta_database,
   if(tr_or_sp == TRUE){
     each_gene_rows <- each_gene_rows[which(each_gene_database_in == "tr")]
   }
-  # 5. If both are "sp"
-  #     1) select ID without "-" (i.e. not a variant)
-  # THIS IS REDUNDANT - caught earlier now
-  # 6. If both are variants, i.e. contain "-"
-  #     1) select the variant with smallest number, e.e GENE-1 over GENE-2
-  # THIS IS REDUNDANT - caught earlier now
-  
-  # 7. If multiple proteins left
-  #     1) select the longest protein
+  # If multiple proteins remain
+  #     1) select longest protein
   each_gene_length <- sapply(seq_along(each_gene_rows), function(x)
     fasta_length[each_gene_rows[x]])
-  # remove genes above the minimum...
+  # remove genes above the minimum.
   # update vector of row matches
   each_gene_rows <- each_gene_rows[!each_gene_length > min(each_gene_length)]
-  
-  # test each gene symbol
-  
-  # return row matches...
-  return(each_gene_rows)   
+return(each_gene_rows)   
 }
 
 
@@ -535,17 +526,12 @@ best_protein <- function(proteins_in){
                                                        proteins)])), 
                           which(uniq_proteins[i] == proteins))]
   ))
-  return(best_proteins)
+return(best_proteins)
 }
 
 # helper function for extracting phospho-positions
 phosho_positions <- function(peptide, mod_peptide, seq, window_size){
-  #print(peptide)
-  #str(seq)
-  #print(seq)
-  #print(mod_peptide)
   count1_2 <- strsplit(seq, peptide)
-  #print(count1_2)
   #1. determine the site of the peptide in the protein.
   frag_lengths <- stri_length(unlist(count1_2))
   #print(frag_lengths)
@@ -563,7 +549,6 @@ phosho_positions <- function(peptide, mod_peptide, seq, window_size){
   phosho_sites <- sapply(seq_len(length(stripped_count)-1), function(i)
     phospho_position+sum(stri_length(stripped_count[1:i]))
   )
-
   # then get the centered sequences...
   # end the protein by the window size to include overhanging
   seq_extend <- gsub(" ", "", paste(paste(rep("X", window_size), collapse=""),
@@ -572,7 +557,6 @@ phosho_positions <- function(peptide, mod_peptide, seq, window_size){
   centred_seqs <- sapply(seq_len(length(phosho_sites)), function(i)
                     substr(seq_extend, phosho_sites[i], phosho_sites[i]+(window_size*2))
   )
-
   # deals with multiple sites:
   #phospho_sites <- print(phospho_sites, collapse=";")
 return(list("sites"=phosho_sites, "seqs"=centred_seqs))
@@ -598,7 +582,6 @@ return(output_seq)
 
 # extract probability of each site, given a vector of sequences
 extract_probability <- function(phospho_input){
-  #
   phospho_prob <- gsub("([[:alpha:]])", "", phospho_input)
   # phospho_out: output the probabilities of all phosphosites
   phospho_prob_out <- gsub(")(", ", ", phospho_prob, fixed=TRUE)
@@ -615,38 +598,38 @@ extract_probability <- function(phospho_input){
   # for instances where there are no probabilities, 
   # make a zero (these are multi-mapped)!
   phospho_prob[phospho_prob==""] <- "0;0"
-  # determine number of sites
-  #phospho_no <- evidence_remap$Modified.sequence
-  #phospho_no <- gsub("(ph)", "1", phospho_no, fixed = TRUE)
-  #phospho_no <- gsub("([[:alpha:]])", "", phospho_no)
-  #phospho_no <- gsub("\\)|\\(|\\_", "", phospho_no)
-  #n_p <- as.numeric(phospho_no)
-  # this is still in 1, 11, 111 format - clean up
   return(list(phospho_prob_out, phospho_prob))  
 }
 
+extract_site_numbers <- function(phospho_probabilities){
+  phospho_no <- gsub("([[:alnum:]])|\\.", "", phospho_probabilities, 
+                     fixed = FALSE)
+  phospho_no <- gsub("()", "1/", phospho_no, 
+                     fixed = TRUE)
+  phospho_no <- sapply(strsplit(phospho_no, '/'), 
+                       function(x) sum(as.numeric(x)))
+return(phospho_no)
+}
+
 # function to select tables based on column names provided
+#evidence_file_in=experiment_lists[[6]]
+#experiment=names(experiment_lists)[6]
+
 tidy_samples <- function(evidence_file_in,
                          annotation_file,
                          experiment,
                          filter_site_method,
                          min_prob){
-  
-  #evidence_file_in <- experiment_lists[[1]]
-  #experiment <- names(experiment_lists)[1]
   # Select columns of interest from annotation file
   annotation_file_filter <- annotation_file[annotation_file$experiment == experiment,]
+  samples_selected <- evidence_file_in[colnames(evidence_file_in) %in% annotation_file_filter$samples]
   
-  samples_selected <- evidence_file_in[,colnames(evidence_file_in) %in% annotation_file_filter$samples]
   # this is now experiment specific
   colnames(samples_selected) <- annotation_file_filter$labels
-  
   # new trimmed table to work with
   clean_data <- data.frame("site_id" = evidence_file_in$annotation,
                            samples_selected,
                            "max_prob" = evidence_file_in$phospho_prob_max)
-  
-  
   # remove duplicates (usually some duplication here)
   clean_data <- unique(clean_data)
   # replace all zeros for NA's - i.e. where an experiment had no measurement
@@ -654,7 +637,6 @@ tidy_samples <- function(evidence_file_in,
   # ONLY keep data that is annotated and complete
   # clean_data <- clean_data[(!is.na(clean_data$max_prob)) & !is.na(clean_data$site_id) ,]
   clean_data <- clean_data[(!is.na(clean_data$site_id)) ,]
-  
   
   # 12. merge duplicate site values
   # key points:
@@ -679,12 +661,12 @@ tidy_samples <- function(evidence_file_in,
     matches <- matches[keep]
     match_names <- names(matches)
   }
-  
-  
-  
+
   # 13. Tidy up the list columns - reformat to sample values (intensity)
+  #matches <- lapply(seq_len(length(matches)), function(i)
+  #  matches[[i]][, colnames(matches[[i]]) %in% annotation_file_filter$labels])
   matches <- lapply(seq_len(length(matches)), function(i)
-    matches[[i]][, colnames(matches[[i]]) %in% annotation_file_filter$labels])
+    matches[[i]][colnames(matches[[i]]) %in% annotation_file_filter$labels])
   
   names(matches) <- match_names
   
@@ -698,9 +680,11 @@ tidy_samples <- function(evidence_file_in,
   rownames(med2) <- match_names
   # clean up NA's
   na_remove <- as.vector(apply(is.na(med2), 1, sum))
-  # remove all columns are NA
+  # remove all NsA
   na_remove <- c(na_remove < ncol(med2))
-  med_out <- med2[na_remove,]
+  
+  med_out <- data.frame(med2[na_remove,])
+  colnames(med_out) <- colnames(med2)
   return(med_out)
 }
 
@@ -740,13 +724,13 @@ extract_fasta_data <- function(fasta_in){
     sub(".*\\|(.*)\\|.*","\\1",names(fasta_in[i]))
   )
   
-  fasta_annotation <- data.frame("header"=fasta_headers,
-                                 "seq"=fasta_sequences,
-                                 "database"=fasta_database,
-                                 "length"=fasta_length,
-                                 "protein"=fasta_protein,
-                                 "gene"=fasta_gene_name,
-                                 "evidence"=fasta_evidence)
+  fasta_annotation <- data.frame("header" = fasta_headers,
+                                 "seq" = fasta_sequences,
+                                 "database" = fasta_database,
+                                 "length" = fasta_length,
+                                 "protein" = fasta_protein,
+                                 "gene" = fasta_gene_name,
+                                 "evidence" = fasta_evidence)
   
 return(list(fasta_annotation,
             fasta_headers,

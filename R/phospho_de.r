@@ -156,9 +156,18 @@ phospho_input <- phospho_norm_out
 
 # missing value imputation
 if(impute == TRUE){
-  # update function below
-  phospho_input <- impute_data(phospho_input,
-                               input_percent)
+  #phospho_input = evidence_tidy_07$intensity
+  #filter out data with less than x% complete:
+  na_remove <- as.vector(apply(is.na(phospho_input), 1, sum))
+  na_remove <- na_remove/ncol(phospho_input)
+  # total rows
+  keep <- c(na_remove < input_percent)
+  # by sample groups?
+  
+  
+  
+  phospho_input <- phospho_input[keep,]
+  phospho_input <- impute_data(phospho_input)
   phospho_impute_out <- phospho_input
 }
 
@@ -245,7 +254,7 @@ phospho_norm <- function(data_in, normalisation_method){
   }
 }
 
-impute_data <- function(data_in, input_percent){
+impute_data <- function(data_in){
   # uses a default seed
   data_out <- data.frame(impute.knn(as.matrix(data_in))$data)
 return(data_out)
@@ -266,17 +275,26 @@ correct_data <- function(data_in, annotation_file){
                           mod, 
                           mod0, 
                           method="irw"))
-  mod_sv <- cbind(mod,
-                  svaobj$sv)
-  mod0_sv <- cbind(mod0,
-                   svaobj$sv)
-  # reweight data
-  v_2 <- invisible(fsva(as.matrix(data_in), 
-                        mod = mod, 
-                        sv = svaobj, 
-                        newdat = data_in, 
-                        method = "exact"))
-  data_out <- v_2$new
+  
+  # CATCH THIS: "No significant surrogate variables"
+  if(svaobj$n.sv == 0){
+    message("As no significant surrogate variables were found: NOT correcting Data")
+    data_out <- data_in
+  }
+  if(svaobj$n.sv > 0){
+      message("Correcting Data")
+      mod_sv <- cbind(mod,
+                      svaobj$sv)
+      mod0_sv <- cbind(mod0,
+                       svaobj$sv)
+      # reweight data
+      v_2 <- invisible(fsva(as.matrix(data_in), 
+                            mod = mod, 
+                            sv = svaobj, 
+                            newdat = data_in, 
+                            method = "exact"))
+      data_out <- v_2$new
+  }
 return(data_out)
 }
 
