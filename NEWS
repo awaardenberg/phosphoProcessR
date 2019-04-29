@@ -1,3 +1,10 @@
+Changes in version 0.99.5 (2019-04-02)
++ detect and remove phoshposites with no probability
++ fix merge for more than 2 experiments in annotation_file
++ catch no surrogate variables detected, message and continue
++ option to filter out mono, di etc. number of phosphosites to tidyEvidence
++ additional paramters max_sites and return_site_numbers added to tidyEvidence
+
 Changes in version 0.99.4 (2019-01-22)
 + Added support to tidyEvidence function for Experiment column
 + changed filter_site_method default to site
