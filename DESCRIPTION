@@ -1,7 +1,7 @@
 Package: phosphoProcessR
 Type: Package
 Title: phosphoProcessR: Differential Phosphorylation Analysis (DPA)
-Version: 0.99.5
+Version: 0.99.6
 Authors@R: person("Ashley J.", "Waardenberg", email =
     "a.waardenberg@gmail.com", role=c("aut", "cre"))
 Description: phosphoProcessR includes functions for remapping and annotation of

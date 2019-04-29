@@ -1,3 +1,9 @@
+Changes in version 0.99.6 (2019-04-29)
++ tidyEvidence - fix "best" annotation bug - now "sp" over "tp"
++ tidyEvidence - fix "best" annotation bug - now selecting highest protein 
+evidence (PE)
++ tidyEvidence - fix median na.rm hash out in peptide merge
+
 Changes in version 0.99.5 (2019-04-02)
 + detect and remove phoshposites with no probability
 + fix merge for more than 2 experiments in annotation_file

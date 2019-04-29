@@ -256,20 +256,23 @@ tidyEvidence <- function(evidence_file = NULL,
     if (filter_site_method == "site"){
       # filter out sites above a minimium, min_prob, probability
       # speed up with parallel here - definately needs improvement
-      #mapping_table_ph_filtered <- bplapply(seq_along(mapping_table_ph$prob),
-      #                                       function(i)
-      #                                         filter_site_prob(mapping_table_ph$prob[i], min_prob))
-      
-      mapping_table_ph$prob_filter <- sapply(seq_along(mapping_table_ph$prob),
+      mapping_table_ph_filtered <- bplapply(seq_along(mapping_table_ph$prob),
                                              function(i)
-                                  filter_site_prob(mapping_table_ph$prob[i], min_prob))
+                                               filter_site_prob(mapping_table_ph$prob[i], min_prob))
+      
+      mapping_table_ph$prob_filter <- unlist(mapping_table_ph_filtered)
+      #mapping_table_ph$prob_filter <- sapply(seq_along(mapping_table_ph$prob),
+      #                                       function(i)
+      #                            filter_site_prob(mapping_table_ph$prob[i], min_prob))
+      
+      
       keep <- grep("(ph)", mapping_table_ph$prob_filter)
       # keep only peptides that still contain a (ph), there above min_prob
       mapping_table_ph <- mapping_table_ph[keep,]
       # count site numbers
       phospho_no <- gsub("(ph)", "1/", mapping_table_ph$prob_filter, fixed = TRUE)
       phospho_no <- gsub("([[:alpha:]])", "", phospho_no)
-      phospho_no <-sapply(strsplit(phospho_no, '/'), function(x) sum(as.numeric(x)))
+      phospho_no <- sapply(strsplit(phospho_no, '/'), function(x) sum(as.numeric(x)))
       mapping_table_ph$phospho_no <- phospho_no
       
       # filter by number of sites defined
@@ -299,13 +302,14 @@ tidyEvidence <- function(evidence_file = NULL,
     centred_sites <- unlist(centred_sites)
     # check match here.
     # i.e. or new data.frame may not match up if contains funky ids
-  
+    #mapping_table_ph$centred_sites <- centred_sites
+    
     # 7. merge with evidence file annotation
-    mapped_out <- data.frame("annotation"= centred_sites, mapping_table_ph)
+    mapped_out_return <- data.frame("annotation"= centred_sites, mapping_table_ph)
   
     # 8. remerge with the evidence file:
-    mapped_out <- data.frame("annotation" = mapped_out$annotation,
-                             "Modified.sequence" = mapped_out$mod_seq)
+    mapped_out <- data.frame("annotation" = mapped_out_return$annotation,
+                             "Modified.sequence" = mapped_out_return$mod_seq)
   }
   
   if(return_intensity == TRUE){
@@ -322,8 +326,10 @@ tidyEvidence <- function(evidence_file = NULL,
                                                uniq_experiments[x],])
     
     names(experiment_lists) <- uniq_experiments
+    #experiment_lists[grep("10", experiment_lists$annotation),]
+    
     # change to bplappy
-    clean_evidence <- lapply(seq_along(experiment_lists), function(x)
+    clean_evidence <- bplapply(seq_along(experiment_lists), function(x)
                                tidy_samples(experiment_lists[[x]],
                                             annotation_file,
                                             names(experiment_lists)[x],
@@ -338,7 +344,7 @@ tidyEvidence <- function(evidence_file = NULL,
     }
     if(length(clean_evidence) > 1){
       # ideally put into a database here, keys will be all mapped sites.
-      med_out <- lapply(1:length(clean_evidence), function(x)
+      med_out <- bplapply(1:length(clean_evidence), function(x)
                         data.frame(clean_evidence[[x]],
                                    "ID"=as.character(
                                      rownames(data.frame(clean_evidence[[x]])))))
@@ -355,7 +361,7 @@ tidyEvidence <- function(evidence_file = NULL,
     med_out <- NA
   }
   if(return_mapping_table == FALSE){
-    mapped_out <- NA
+    mapped_out_return <- NA
   }
   if(return_site_probability == FALSE){
     phospho_prob_out <- NA
@@ -366,12 +372,10 @@ tidyEvidence <- function(evidence_file = NULL,
   
   
 return(list("intensity" = med_out,
-       "mapping_table" = mapped_out,
+       "mapping_table" = mapped_out_return,
        "site_probability" = phospho_prob_out,
        "site_numbers" = site_numbers_out))
 }
-
-
 
 # helper function for mapping the phospho-positions &
 # extracting the recentred sequences
@@ -470,7 +474,6 @@ map_sites <- function(mapping_table_ph,
 
 }
 
-
 best_gene <- function(each_gene, 
                       each_gene_rows,
                       fasta_evidence, 
@@ -482,18 +485,25 @@ best_gene <- function(each_gene,
   # or removal all with evidence greater than min...
   each_gene_evidence_in <- sapply(seq_along(each_gene_rows), function(x)
     fasta_evidence[each_gene_rows[x]])
+  
   # remove genes with evidence above the minimum...
   # update vector of row matches
-  each_gene_rows <- each_gene_rows[!each_gene_evidence_in > min(each_gene_evidence_in)]
+  # this will only select the minimum...
+  
+  #each_gene_rows <- each_gene_rows[!each_gene_evidence_in > min(each_gene_evidence_in)]
+  each_gene_rows <- each_gene_rows[each_gene_evidence_in >= min(each_gene_evidence_in)]
+  
+  
+  
   
   # If database is the same
-  #     1) select "tr" over "sp"
+  #     1) select "sp" over "tr"
   each_gene_database_in <- sapply(seq_along(each_gene_rows), function(x)
     fasta_database[each_gene_rows[x]])
-  tr_or_sp <- "tr" %in% each_gene_database_in
+  tr_or_sp <- "sp" %in% each_gene_database_in
   # update the gene rows if tr are present, otherwise leave alone
   if(tr_or_sp == TRUE){
-    each_gene_rows <- each_gene_rows[which(each_gene_database_in == "tr")]
+    each_gene_rows <- each_gene_rows[which(each_gene_database_in == "sp")]
   }
   # If multiple proteins remain
   #     1) select longest protein
@@ -673,7 +683,7 @@ tidy_samples <- function(evidence_file_in,
   # 14. merge the values, when there are mulitple values:
   # ADD IF HERE BASED ON METHOD (currently only median utilised)
   med <- lapply(seq_len(length(matches)), function(i)
-    apply(log2(matches[[i]]), 2, median)) #,na.rm = TRUE))
+    apply(log2(matches[[i]]), 2, median ,na.rm = TRUE))
   
   # 15. collapse to meaninful table:
   med2 <- do.call("rbind", med)
