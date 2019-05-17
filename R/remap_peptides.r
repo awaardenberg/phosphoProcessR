@@ -263,7 +263,7 @@ if(return_mapping_table == TRUE){
   if (filter_site_method == "site"){
     # filter out sites above a minimium, min_prob, probability
     # return to BPLAPPY
-    filter_peptides <- lapply(seq_along(evidence_annotate$Phospho..STY..Probabilities),
+    filter_peptides <- bplapply(seq_along(evidence_annotate$Phospho..STY..Probabilities),
                                   function(i)
                                   filter_site_prob(input_sequence = evidence_annotate$Phospho..STY..Probabilities[i], 
                                                    threshold = min_prob,
@@ -735,7 +735,6 @@ keep_peptide_test <- function(data, site){
 return(keep)
 }
 
-
 tidy_experiments <- function(evidence_file_in,
                          annotation_file,
                          experiment){
@@ -754,7 +753,7 @@ tidy_experiments <- function(evidence_file_in,
     subset(samples_selected, site_id==uniq_site[i]))
   # update colnames
   matches <- lapply(seq_along(matches), function(i)
-    matches[[i]][, colnames(matches[[i]]) %in% annotation_file_filter$labels]) 
+    matches[[i]][colnames(matches[[i]]) %in% annotation_file_filter$labels]) 
   # determine the median of the matches and return
   med <- lapply(seq_along(matches), function(i)
       apply(log2(matches[[i]]), 2, median, na.rm = TRUE))
