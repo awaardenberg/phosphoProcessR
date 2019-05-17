@@ -744,7 +744,6 @@ tidy_experiments <- function(evidence_file_in,
   samples_selected <- evidence_file_in[colnames(evidence_file_in) %in% annotation_file$samples]
   colnames(samples_selected) <- annotation_file_filter$labels[match(annotation_file_filter$samples,
                                                              colnames(samples_selected))]
-  
   samples_selected$site_id <- evidence_file_in$site_id
   # determine unique peptide annotations
   uniq_site <- unique(samples_selected$site_id)
@@ -766,7 +765,7 @@ tidy_experiments <- function(evidence_file_in,
   na_remove <- c(na_remove < ncol(med2))
   
   med_out <- data.frame(med2[na_remove,])
-  #colnames(med_out) <- colnames(med2)
+  colnames(med_out) <- colnames(med2)
   return(med_out)
 }
 
