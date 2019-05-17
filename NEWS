@@ -1,8 +1,14 @@
+Changes in version 0.99.7 (2019-05-02)
++ major rewrite of tidyEvidence (no longer create annotation_table)
++ added peptide level filtering
++ change criteria to peptide filtering
+
 Changes in version 0.99.6 (2019-04-29)
 + tidyEvidence - fix "best" annotation bug - now "sp" over "tp"
 + tidyEvidence - fix "best" annotation bug - now selecting highest protein 
 evidence (PE)
 + tidyEvidence - fix median na.rm hash out in peptide merge
++ speed-ups to tidyEvidence with bpapply implementation
 
 Changes in version 0.99.5 (2019-04-02)
 + detect and remove phoshposites with no probability
