@@ -50,7 +50,6 @@ plot_this <- function(data_in = NULL,
                       ){
 
 ####///---- check inputs ----\\\###
-
   if(hclust == TRUE | pca==TRUE){
     if (is.null(annotation_file))
       stop("annotation_file not provided; you must provide a annotation_file
@@ -150,7 +149,7 @@ plot_hclust_wrapper <- function(data_in=NULL,
            c(as.character(unique(annotation_file$group)),
              paste(seq_len(length(annotation_file$labels)),
                    annotation_file$labels, sep="-")),
-           col=c(colors[seq_along(length(unique(annotation_file$group)))],
+           col=c(colors[unique(annotation_file$group)],
                  rep("black", length(annotation_file$labels))),
            pch = c(rep(19, length(unique(annotation_file$group))),
                    rep(0, length(annotation_file$labels))),
@@ -196,7 +195,7 @@ plot_PCA_wrapper <- function(data_in=NULL,
   # add legend:
   if(legend==TRUE){
     legend("bottomright", c(as.character(unique(pc_scores$group))),
-                            col=colors[annotation_file$group],
+                            col=colors[unique(annotation_file$group)],
                           pch = c(rep(19, length(unique(pc_scores$group)))),
            title = "SAMPLE GROUPS", inset = .02, cex=0.5)
   }
