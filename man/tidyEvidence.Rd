@@ -5,11 +5,11 @@
 \title{Remap and merge MaxQuant Evidence file into "tidy" data frame}
 \usage{
 tidyEvidence(evidence_file = NULL, annotation_file = NULL,
-  fasta_file = NULL, window_size = 15, min_prob = 0,
-  max_sites = "all", filter_site_method = "site",
-  return_intensity = TRUE, return_mapping_table = TRUE,
-  return_site_probability = TRUE, return_site_numbers = TRUE,
-  verbose = FALSE)
+  fasta_file = NULL, window_size = 15, min_prob = 0.75,
+  max_sites = "all", filter_site_method = "peptide",
+  filter_peptide = "method_6", return_intensity = TRUE,
+  return_mapping_table = TRUE, return_site_probability = TRUE,
+  return_site_numbers = TRUE, verbose = FALSE)
 }
 \arguments{
 \item{evidence_file}{MaxQuant evidence.txt file}
@@ -23,19 +23,26 @@ around the phosphosite. E.g. XXXSXXX, would correspond to a window size of 7.
 Default = 15}
 
 \item{min_prob}{The minimum probability observed for any phosphosite in a
-peptide. Recommended to use 0.7, but first assess with distribution as per
-output table. See vignette for example. Default = 0}
+peptide. Recommended to use 0.75, but assess with distribution as per 
+vignette for example. Default = 0.75}
 
-\item{max_sites}{This will filter out peptides with numbers of phosphosites 
+\item{max_sites}{This will filter out peptides with number of phosphosites 
 greater than this value. Options are numeric values (e.g., 1, 2, 3) or "all".
-"all" keeps all peptides. Default="all"}
+E.g. 1 will only retain phosphopeptides with a single phosphosite, 2 with 2 
+and "all" keeps all peptides. Default="all"}
 
 \item{filter_site_method}{Two methods for filtering peptides by site
-probability are available. "site" will remove all phosphosites identified
+probability are available. "site" will remove all "phosphosites" identified
 with a probability lower that "min_prob". "peptide" will remove all peptides
-that are predicted to contain a set combination of sites which do not conatin
-a minimum probability of a site. Options are "site" or "peptide". Default =
-"site"}
+that contain a set combination of sites which do not contain a minimum 
+probability, min_prob, and following the rules of "filter_peptide". Options 
+are "site" or "peptide". Default = "peptide"}
+
+\item{filter_peptide}{Multiple methods for filtering peptide probabilities. 
+"method_6" will keep all phosphopeptides if there is evidence for existence 
+in any "experiment" as per the "annotation_file" for any major site above 
+0.5, and at least one site is above the "min_prob". Currently only "method_6"
+is implemented. Default = "method_6"}
 
 \item{return_intensity}{If TRUE will evaluate the MaxQuant evidence results
 and return a table of intensities for further analysis. If FALSE, the
@@ -59,10 +66,13 @@ Default = TRUE.}
 \item{verbose}{Print progress to screen. Default = FALSE}
 }
 \value{
-List of 3 objects. 1) xx$intensity is a reformatted table of
+List of 4 objects. 1) xx$intensity is a reformatted table of
 intensities, now suitable for further statistical analyses, 2)
-xx$mapping_table is table of remapped peptides and 3) xx$site_probability is a
-vector of all the site probabilities identified.
+xx$mapping_table is the evidence file with additional annotations for the 
+remapped peptides, 3) xx$site_probability is a vector of all the site 
+probabilities identified (includes all major and minor sites) and 4) 
+xx$site_numbers is a vector the number of sites that were identified 
+(includes all major and minor sites)
 }
 \description{
 Given a protein database, this function will remap and annotate
@@ -84,8 +94,8 @@ evidence_tidy <- tidyEvidence(evidence_file = evidence_file_example,
                               annotation_file = malaria_annotation_example,
                               fasta_file = human_fasta_example,
                               window_size = 15,
-                              min_prob = 0.7,
-                              filter_site_method = "site")
+                              min_prob = 0.75,
+                              filter_site_method = "peptide")
 
 ## View results of table ready for statistical analysis
 head(evidence_tidy$intensity, 5)
