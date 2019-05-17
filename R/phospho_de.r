@@ -38,8 +38,8 @@
 #'                               annotation_file = malaria_annotation_example,
 #'                               fasta_file = human_fasta_example,
 #'                               window_size = 15,
-#'                               min_prob = 0.7,
-#'                               filter_site_method = "site")
+#'                               min_prob = 0.75,
+#'                               filter_site_method = "peptide")
 #'
 #' ## Run statistical analysis on tidy and remapped evidence file
 #' DPA_out <- phosphoDE(phospho_input = evidence_tidy$intensity,
