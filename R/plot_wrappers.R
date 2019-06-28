@@ -72,6 +72,8 @@ plot_this <- function(data_in = NULL,
         the labels in the annotation_file. Check file names match or
         correct annotation_file provided. ", set_diff, " not found!")
 
+    # correct coloring issue
+    annotation_file$group <- as.factor(as.character(annotation_file$group))
     # establish colours - "Set3" is up to 12 distinct colours
     # must have a minimum of 3, this set-up as follows:
     colors <- brewer.pal(max(length(unique(annotation_file$group)), 3), "Set3")

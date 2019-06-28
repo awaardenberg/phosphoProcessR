@@ -1,3 +1,6 @@
+Changes in version 0.99.8 (2019-05-27)
++ changing of peptide filtering to match criteria "6" by default.
+
 Changes in version 0.99.7 (2019-05-02)
 + major rewrite of tidyEvidence (no longer create annotation_table)
 + added peptide level filtering

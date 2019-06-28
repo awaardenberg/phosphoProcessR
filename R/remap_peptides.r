@@ -241,8 +241,10 @@ contains_ph <- grep("(ph)", evidence_annotate$Modified.sequence)
 keep <- setdiff(contains_ph, cont_mapped)
 evidence_annotate <- evidence_annotate[keep,]
 # 5. remove cases where there are no probabilities assigned
+# UPDATE HERE - keep NAs
 evidence_annotate$Phospho..STY..Probabilities[evidence_annotate$Phospho..STY..Probabilities == ""] <- NA
-evidence_annotate <- evidence_annotate[!is.na(evidence_annotate$Phospho..STY..Probabilities),]
+#evidence_annotate <- evidence_annotate[!is.na(evidence_annotate$Phospho..STY..Probabilities),]
+
 # 6. determine probability distribution and site nunbers from all site probabilities
 # includes minor and major probabilities
 phospho_prob_out <- extract_probability(evidence_annotate$Phospho..STY..Probabilities)[[1]]
@@ -647,13 +649,14 @@ return(output_seq)
 
 # extract probability of each site, given a vector of sequences
 extract_probability <- function(phospho_input){
+  #phospho_input <- evidence_annotate$Phospho..STY..Probabilities
   phospho_prob <- gsub("([[:alpha:]])", "", phospho_input)
   # phospho_out: output the probabilities of all phosphosites
   phospho_prob_out <- gsub(")(", ", ", phospho_prob, fixed=TRUE)
   phospho_prob_out <- gsub("\\)|\\(", "", phospho_prob_out)
   phospho_prob_out <- paste(phospho_prob_out, collapse = ", ")
   phospho_prob_out <- strsplit(phospho_prob_out, ", ")[[1]]
-  phospho_prob_out <- as.numeric(phospho_prob_out)
+  phospho_prob_out <- suppressWarnings(as.numeric(phospho_prob_out))
   phospho_prob_out <- phospho_prob_out[!is.na(phospho_prob_out)]
   # from here, fit a mixture model to automatically determine which to keep?
   # continue clean -up
@@ -675,6 +678,7 @@ extract_site_numbers <- function(phospho_probabilities){
                        function(x) sum(as.numeric(x)))
 return(phospho_no)
 }
+#evidence_file_in = evidence_annotate
 
 tidy_samples <- function(evidence_file_in,
                          annotation_file,
@@ -711,7 +715,8 @@ tidy_samples <- function(evidence_file_in,
   }
   if (filter_site_method == "peptide"){
     # remove peptides that dont pass the prob_count greater than 0.5
-    clean_data <- clean_data[clean_data$prob_count_05 >= clean_data$phospho_no, ]
+    # put in option here to cut at a minimum probability...
+    #clean_data <- clean_data[clean_data$prob_count_05 >= clean_data$phospho_no, ]
     # uniq_sites remaining    
     uniq_site <- as.character(unique(clean_data$site_id))
     # determine which uniq_sites to keep
@@ -726,12 +731,24 @@ tidy_samples <- function(evidence_file_in,
   }
 return(matches_keep2) 
 }
-
+#data = clean_data
+#site = uniq_site[1]
 # check that the evidence does exist in the dataset accross all experiments
 # this way there is just one subset and check
 keep_peptide_test <- function(data, site){
   data_subset <- subset(data, site_id==site)
-  keep <- max(data_subset$prob_count_filter) >= max(data_subset$phospho_no)
+  #clean_data <- clean_data[clean_data$prob_count_05 >= clean_data$phospho_no, ]
+  # evidence of some peptide have all sites being greater than a value
+  # and some peptide having all sites greater than 0.5 (from same peptide)
+  # this will implement strategy 3!
+  #keep <- max(data_subset$prob_count_filter) >= max(data_subset$phospho_no)
+  # strategy 6:
+  # must contain a single site > 0.75
+  # AND
+  # all sites must be > 0.5
+  keep <- (data_subset$prob_count_filter >= 1) & (data_subset$prob_count_05 >= data_subset$phospho_no)
+  keep <- "TRUE" %in% keep
+  
 return(keep)
 }
 
